@@ -6,11 +6,14 @@ import {
   CreateShortUrlDto,
   createShortUrlDtoValidation,
 } from "./create-url.dto";
-import { UrlModel } from "./types";
+import { NatsSubjects, UrlModel } from "./types";
 import { Cache } from "./cache";
+import { natsConnection } from "./queue";
+import { NatsConnection } from "nats";
 
 export const router = Router();
-const cacheKeyTemplate = "short-";
+export const cacheKeyTemplate = "short-";
+let nats: NatsConnection | null = null;
 
 const validateBody = (req: Request, res: Response) => {
   if (!req.body) {
@@ -43,21 +46,8 @@ const createShortUrl = (url: string): UrlModel => {
   };
 };
 
-const sendToPostgres = async (urlModel: UrlModel) => {
-  await sql`
-        INSERT INTO urls (id, original_url) VALUES (${urlModel.id}, ${urlModel.original_url});
-      `;
-};
-
 const getFromPostgres = async (id: string) => {
   return await sql`SELECT * FROM urls WHERE id=${id} LIMIT 1;`;
-};
-
-const sendToRedis = async (urlModel: UrlModel) => {
-  const { redis } = Cache.getInstance();
-  const cacheKey = `${cacheKeyTemplate}${urlModel.id}`;
-
-  await redis.set(cacheKey, urlModel.original_url);
 };
 
 const getFromRedis = async (id: string) => {
@@ -96,8 +86,11 @@ router.post(
       const dto = req.body;
       const urlModel = createShortUrl(dto.url);
 
-      sendToRedis(urlModel);
-      sendToPostgres(urlModel);
+      if (!nats) {
+        nats = await natsConnection();
+      }
+
+      nats.publish(NatsSubjects.SHORTIFY, JSON.stringify(urlModel));
 
       res.status(200).json({
         result: `http://localhost:${process.env.API_PORT}/${urlModel.id}`,

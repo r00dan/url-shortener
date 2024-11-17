@@ -6,6 +6,7 @@ const databaseConfig: postgres.Options<{}> = {
   user: process.env.POSTGRES_USER,
   password: process.env.POSTGRES_PASSWORD,
   database: process.env.POSTGRES_DB,
+  onnotice: () => {},
 };
 
 export const sql = postgres(databaseConfig);

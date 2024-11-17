@@ -1,6 +1,8 @@
 services:
-  shortener:
-    build: .
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     ports:
       - "${API_PORT}:8080"
     volumes:
@@ -14,6 +16,9 @@ services:
         restart: true
       redis:
         condition: service_started
+      nats:
+        condition: service_started
+        restart: true
     environment:
       POSTGRES_HOST: ${POSTGRES_HOST}
       POSTGRES_PORT: ${POSTGRES_PORT}
@@ -22,6 +27,41 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
+      NATS_HOST: ${NATS_HOST}
+      NATS_PORT: ${NATS_PORT}
+    networks:
+      - shortener-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    ports:
+      - "${WORKER_PORT}:8080"
+    volumes:
+      - type: bind
+        source: ./
+        target: /worker/
+        consistency: delegated
+    depends_on:
+      postgres:
+        condition: service_started
+        restart: true
+      redis:
+        condition: service_started
+      nats:
+        condition: service_started
+        restart: true
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      NATS_HOST: ${NATS_HOST}
+      NATS_PORT: ${NATS_PORT}
     networks:
       - shortener-network
 
@@ -44,6 +84,15 @@ services:
     container_name: redis
     ports:
       - "${REDIS_PORT}:6379"
+    networks:
+      - shortener-network
+
+  nats:
+    image: nats:latest
+    container_name: nats
+    ports:
+      - "${NATS_PORT}:4222"
+    restart: always
     networks:
       - shortener-network
 
