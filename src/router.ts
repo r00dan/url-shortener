@@ -25,11 +25,14 @@ const validateBody = (req: Request, res: Response) => {
 const validateDto = (req: Request, res: Response) => {
   const dto = req.body;
   const { error } = createShortUrlDtoValidation.validate(dto);
+  const errorMessage = `Invalid input data. ${error?.message ?? ""}`;
 
   if (error) {
     res.status(422).json({
-      message: `Invalid input data. ${error.message}`,
+      message: errorMessage,
     });
+
+    throw new Error(errorMessage);
   }
 };
 
@@ -46,16 +49,41 @@ const sendToPostgres = async (urlModel: UrlModel) => {
       `;
 };
 
+const getFromPostgres = async (id: string) => {
+  return await sql`SELECT * FROM urls WHERE id=${id} LIMIT 1;`;
+};
+
 const sendToRedis = async (urlModel: UrlModel) => {
   const { redis } = Cache.getInstance();
+  const cacheKey = `${cacheKeyTemplate}${urlModel.id}`;
 
-  await redis.set(`${cacheKeyTemplate}${urlModel.id}`, urlModel.original_url);
+  await redis.set(cacheKey, urlModel.original_url);
+};
+
+const getFromRedis = async (id: string) => {
+  const { redis } = Cache.getInstance();
+  const cacheKey = `${cacheKeyTemplate}${id}`;
+
+  return await redis.get(cacheKey);
 };
 
 router.get("/:id", async (req, res) => {
   try {
-    res.status(200).json({ message: req.params.id });
-  } catch (error) {}
+    const id = req.params.id;
+    const cachedData = await getFromRedis(id);
+
+    if (!!cachedData) {
+      return res.redirect(cachedData);
+    }
+
+    const urlModel = await getFromPostgres(id);
+
+    if (!!urlModel) {
+      return res.redirect(urlModel[0].original_url);
+    }
+  } catch (error) {
+    console.error(error);
+  }
 });
 
 router.post(
