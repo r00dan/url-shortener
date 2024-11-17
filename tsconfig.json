@@ -6,7 +6,8 @@
     "removeComments": false,
     "esModuleInterop": true,
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "strictNullChecks": false
   },
   "include": ["src/*.ts"],
   "exclude": ["node_modules"]
